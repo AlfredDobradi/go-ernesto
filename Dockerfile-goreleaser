@@ -1,0 +1,6 @@
+FROM debian:bookworm
+
+RUN apt-get update && apt-get install -y ca-certificates
+
+COPY ./ernesto-tacos /usr/bin/ernesto
+ENTRYPOINT ["/usr/bin/ernesto"]
