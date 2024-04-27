@@ -87,11 +87,14 @@ func getRepos(ctx context.Context, clientSet *dynamic.DynamicClient) ([]Reposito
 	repositories := make([]Repository, len(repos.Items))
 	for i, repo := range repos.Items {
 		slog.Info("Found repo", "name", repo.Object["metadata"].(map[string]any)["name"])
+
+		spew.Dump(repo.Object)
+
 		repositories[i] = Repository{
 			Name:      repo.GetName(),
 			Namespace: repo.GetNamespace(),
 		}
 	}
 
-	return nil, nil
+	return repositories, nil
 }
