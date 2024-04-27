@@ -5,9 +5,13 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
+	"github.com/go-git/go-git/v5/storage/memory"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -41,10 +45,11 @@ func main() {
 		spew.Dump(repos)
 	}
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Minute)
 
 	// queue := make(chan struct{})
 
+	wg := &sync.WaitGroup{}
 	for {
 		select {
 		case <-ticker.C:
@@ -52,14 +57,17 @@ func main() {
 			if err != nil {
 				slog.Error("Failed to get repos", "error", err)
 			} else {
-				spew.Dump(repos)
+				for _, repo := range repos {
+					wg.Add(1)
+					go processRepo(ctx, wg, repo)
+				}
 			}
 
 		case <-rootCtx.Done():
 			cancel()
 		}
 	}
-
+	wg.Wait()
 }
 
 type Repository struct {
@@ -67,6 +75,7 @@ type Repository struct {
 	Namespace   string
 	URL         string
 	AccessToken string
+	Username    string
 }
 
 func getRepos(ctx context.Context, clientSet *dynamic.DynamicClient) ([]Repository, error) {
@@ -94,8 +103,43 @@ func getRepos(ctx context.Context, clientSet *dynamic.DynamicClient) ([]Reposito
 			Namespace:   repo.GetNamespace(),
 			URL:         spec["repoUrl"].(string),
 			AccessToken: spec["accessToken"].(string),
+			Username:    spec["username"].(string),
 		}
 	}
 
 	return repositories, nil
+}
+
+func getLatestCommit(ctx context.Context, repo Repository) (string, error) {
+	r, err := git.Clone(memory.NewStorage(), nil, &git.CloneOptions{
+		URL: repo.URL,
+		Auth: &http.BasicAuth{
+			Username: repo.Username,
+			Password: repo.AccessToken,
+		},
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	spew.Dump(r)
+
+	return "", nil
+}
+
+func processRepo(ctx context.Context, wg *sync.WaitGroup, repo Repository) {
+	hash, err := getLatestCommit(ctx, repo)
+	if err != nil {
+		slog.Error("Failed to get latest commit",
+			"error", err,
+			"repository", repo.URL)
+		return
+	}
+
+	slog.Info("Latest commit hash retrieved from repository",
+		"repository", repo.Name,
+		"hash", hash)
+
+	defer wg.Done()
 }
