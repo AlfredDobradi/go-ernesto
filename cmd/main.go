@@ -50,6 +50,7 @@ func main() {
 	// queue := make(chan struct{})
 
 	wg := &sync.WaitGroup{}
+Loop:
 	for {
 		select {
 		case <-ticker.C:
@@ -65,6 +66,7 @@ func main() {
 
 		case <-rootCtx.Done():
 			cancel()
+			break Loop
 		}
 	}
 	wg.Wait()
@@ -123,9 +125,12 @@ func getLatestCommit(ctx context.Context, repo Repository) (string, error) {
 		return "", err
 	}
 
-	spew.Dump(r)
+	ref, err := r.Head()
+	if err != nil {
+		return "", err
+	}
 
-	return "", nil
+	return ref.Hash().String(), nil
 }
 
 func processRepo(ctx context.Context, wg *sync.WaitGroup, repo Repository) {
