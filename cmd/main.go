@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log/slog"
-	"net/url"
 	"os"
 	"os/signal"
 	"time"
@@ -66,7 +65,7 @@ func main() {
 type Repository struct {
 	Name        string
 	Namespace   string
-	URL         *url.URL
+	URL         string
 	AccessToken string
 }
 
@@ -88,11 +87,13 @@ func getRepos(ctx context.Context, clientSet *dynamic.DynamicClient) ([]Reposito
 	for i, repo := range repos.Items {
 		slog.Info("Found repo", "name", repo.Object["metadata"].(map[string]any)["name"])
 
-		spew.Dump(repo.Object)
+		spec := repo.Object["spec"].(map[string]any)
 
 		repositories[i] = Repository{
-			Name:      repo.GetName(),
-			Namespace: repo.GetNamespace(),
+			Name:        repo.GetName(),
+			Namespace:   repo.GetNamespace(),
+			URL:         spec["repoUrl"].(string),
+			AccessToken: spec["accessToken"].(string),
 		}
 	}
 
